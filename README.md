@@ -46,3 +46,4 @@ Bilder: JPG, PNG, WebP, GIF, AVIF bis 12 MB. Videos: MP4/WebM bis 50 MB. Browser
 Das Titelbild lädt ein externes Vietnamfoto von Unsplash; ohne Bildverbindung bleibt eine lokale SVG-Landschaft sichtbar. Webfonts sind optional und besitzen lokale Ersatzschriften. Eigene Familienbilder und Vlogs liegen ausschließlich im privaten Medienspeicher, nicht im Git-Repository.
 
 Alle Flugzeiten, Hotels und Ausflüge sind vorläufige Vorschläge. Preis, Verfügbarkeit, Saison und Tierbeobachtungen sind nicht garantiert.
+

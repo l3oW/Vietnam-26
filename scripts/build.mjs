@@ -1,0 +1,14 @@
+import {readFile,writeFile,mkdir,cp,rm} from 'node:fs/promises';
+import trip from '../web/trip.mjs';
+await rm('dist',{recursive:true,force:true});
+await mkdir('dist/server',{recursive:true});
+await mkdir('dist/.openai',{recursive:true});
+const types={'index.html':'text/html; charset=utf-8','app.js':'text/javascript; charset=utf-8','style.css':'text/css; charset=utf-8','favicon.svg':'image/svg+xml'};
+const assets={};
+for(const [name,type] of Object.entries(types)) assets[name==='index.html'?'/':'/'+name]={body:await readFile('web/'+name,'utf8'),type};
+const runtime=(await readFile('worker/server.mjs','utf8')).replaceAll('export function ','function ');
+const result='const assets='+JSON.stringify(assets)+';\nconst defaultTrip='+JSON.stringify(trip)+';\n'+runtime+'\nexport default createWorker({assets,defaultTrip});\n';
+await writeFile('dist/server/index.js',result);
+await cp('.openai/hosting.json','dist/.openai/hosting.json');
+await cp('drizzle','dist/.openai/drizzle',{recursive:true});
+console.log('Built dependency-free Worker with private D1 + R2 storage.');

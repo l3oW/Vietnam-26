@@ -1,0 +1,10 @@
+/node_modules/
+/dist/
+/work/
+/outputs/
+/.sites-runtime/
+/.local-data/
+/.DS_Store
+.env*
+.dev.vars*
+*.log
