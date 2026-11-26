@@ -47,3 +47,11 @@ Das Titelbild lädt ein externes Vietnamfoto von Unsplash; ohne Bildverbindung b
 
 Alle Flugzeiten, Hotels und Ausflüge sind vorläufige Vorschläge. Preis, Verfügbarkeit, Saison und Tierbeobachtungen sind nicht garantiert.
 
+
+## Früchte-Counter
+
+Die gemeinsame Liste berücksichtigt 21 in Vietnam angebaute Fruchtsorten und die Monate des 14-Tage-Reisezeitraums. Sommerfrüchte werden außerhalb ihrer regionalen Saison ausgeblendet. Ganzjährige und regionale Produktion ist gekennzeichnet; keine Marktverfügbarkeit wird garantiert. Grundlage sind UNIDO/DCP/MARD und die verlinkten Reiseführer in `lib/fruits.mjs`.
+
+Jede Sorte zählt einmal für die Familie. Eigene Funde lassen sich hinzufügen, suchen, abhaken und durch die erstellende Person wieder entfernen. Duplikate werden serverseitig abgefangen. Häkchen bleiben bei einem Datumswechsel erhalten; der Fortschritt zählt nur aktuell angezeigte Sorten. Reisedaten können manuell oder mit den vorläufigen Oster-/Pfingst-Beispielen geändert werden und werden erst durch Speichern übernommen.
+
+Die Datenbankmigration `0001_custom_fruits.sql` wird zusätzlich zur ursprünglichen Migration benötigt. Die lokale Vorschau wendet neue SQL-Migrationen automatisch in Reihenfolge an. Die App bietet jetzt eine feste Schnellnavigation auf kleinen Bildschirmen und eine datumsbezogene Reiseübersicht.

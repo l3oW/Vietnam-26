@@ -1,3 +1,5 @@
+import {FRUIT_CATALOG,matchingFruit,normalizeFruitName,fruitSelection} from '../lib/fruits.mjs';
+
 const json = (value, status = 200) => Response.json(value, {status, headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
 const error = (message, status = 400) => json({error:message},status);
 const clean = (value, max=1000) => typeof value==='string' ? value.trim().slice(0,max) : '';
@@ -79,8 +81,9 @@ export function createWorker({assets,defaultTrip}) {
       }
       if(!env.DB||!env.BUCKET) return error('Der gemeinsame Speicher ist noch nicht eingerichtet. Bitte später erneut versuchen.',503);
       if(u.pathname==='/api/state'&&request.method==='GET') {
-        const [plan,checks,media]=await Promise.all([getPlan(env,defaultTrip),env.DB.prepare('SELECT id FROM quest_checks WHERE done = 1').all(),env.DB.prepare('SELECT * FROM media ORDER BY created_at DESC').all()]);
-        return json({...plan,user,checks:checks.results.map(x=>x.id),media:media.results.map(row=>safeMedia(row,user))});
+        const [plan,checks,media,custom]=await Promise.all([getPlan(env,defaultTrip),env.DB.prepare('SELECT id FROM quest_checks WHERE done = 1').all(),env.DB.prepare('SELECT * FROM media ORDER BY created_at DESC').all(),env.DB.prepare('SELECT * FROM custom_fruits ORDER BY created_at, id').all()]);
+        const done=checks.results.map(x=>x.id);
+        return json({...plan,user,checks:done,media:media.results.map(row=>safeMedia(row,user)),...fruitSelection(plan.trip.startDate,custom.results,done,user.id)});
       }
       if(u.pathname==='/api/plan'&&request.method==='PUT') {
         const input=await readJson(request);
@@ -88,15 +91,37 @@ export function createWorker({assets,defaultTrip}) {
         const trip=validateTrip(input.trip,defaultTrip);
         const row=await env.DB.prepare('INSERT INTO trip_documents (id, data, revision, updated_at) VALUES (?, ?, 1, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data, revision=trip_documents.revision+1, updated_at=excluded.updated_at WHERE trip_documents.revision=? RETURNING revision').bind('trip',JSON.stringify(trip),new Date().toISOString(),input.revision).first();
         if(!row) return error('Jemand hat den Reiseplan inzwischen geändert. Bitte Deine Eingabe sichern, die App neu laden und erneut eintragen.',409);
-        return json({trip,revision:row.revision});
+        const [custom,checks]=await Promise.all([env.DB.prepare('SELECT * FROM custom_fruits ORDER BY created_at, id').all(),env.DB.prepare('SELECT id FROM quest_checks WHERE done = 1').all()]);
+        return json({trip,revision:row.revision,...fruitSelection(trip.startDate,custom.results,checks.results.map(x=>x.id),user.id)});
       }
       if(u.pathname==='/api/quests'&&request.method==='POST') {
         const input=await readJson(request);
         const {trip}=await getPlan(env,defaultTrip);
-        const allowed=new Set([...trip.days.flatMap(d=>d.quests.map((_,i)=>'day-'+d.id+'-'+i)),...trip.fruits.map(f=>'fruit-'+f.id)]);
+        const custom=await env.DB.prepare('SELECT id FROM custom_fruits').all();
+        const allowed=new Set([...trip.days.flatMap(d=>d.quests.map((_,i)=>'day-'+d.id+'-'+i)),...FRUIT_CATALOG.map(f=>'fruit-'+f.id),...custom.results.map(f=>'fruit-'+f.id)]);
         if(!allowed.has(input.id)||typeof input.done!=='boolean') return error('Diese Quest gibt es nicht.');
         await env.DB.prepare('INSERT INTO quest_checks (id,done,updated_by,updated_at) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET done=excluded.done,updated_by=excluded.updated_by,updated_at=excluded.updated_at').bind(input.id,input.done?1:0,user.id,new Date().toISOString()).run();
         return json({id:input.id,done:input.done});
+      }
+      if(u.pathname==='/api/fruits'&&request.method==='POST') {
+        const input=await readJson(request);
+        const name=clean(input.name,80),normalized=normalizeFruitName(name);
+        if(normalized.length<2)return error('Bitte einen Fruchtnamen mit mindestens zwei Zeichen eintragen.');
+        if(matchingFruit(name))return error('Diese Frucht gehört bereits zur Liste. Sie wird passend zur Reisezeit eingeblendet. Suche auch nach ihrem anderen Namen.',409);
+        const count=await env.DB.prepare('SELECT COUNT(*) AS total FROM custom_fruits').first();
+        if(count.total>=100)return error('Ihr habt bereits 100 eigene Sorten ergänzt. Bitte zuerst einen eigenen Eintrag entfernen.',409);
+        const id='custom-'+crypto.randomUUID();
+        const row=await env.DB.prepare('INSERT INTO custom_fruits (id,name,normalized_name,local_name,notes,author_id,author_name,created_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(normalized_name) DO NOTHING RETURNING id').bind(id,name,normalized,clean(input.local,80),clean(input.notes,600),user.id,user.name,new Date().toISOString()).first();
+        if(!row)return error('Diese Frucht wurde bereits von Eurer Reisecrew ergänzt.',409);
+        return json({id},201);
+      }
+      const fruitMatch=u.pathname.match(/^\/api\/fruits\/(custom-[\w-]{36})$/);
+      if(fruitMatch&&request.method==='DELETE') {
+        const row=await env.DB.prepare('SELECT id,author_id FROM custom_fruits WHERE id=?').bind(fruitMatch[1]).first();
+        if(!row)return error('Dieser eigene Fund wurde nicht gefunden.',404);
+        if(row.author_id!==user.id)return error('Du kannst nur die Früchte entfernen, die Du selbst ergänzt hast.',403);
+        await env.DB.batch([env.DB.prepare('DELETE FROM quest_checks WHERE id=?').bind('fruit-'+row.id),env.DB.prepare('DELETE FROM custom_fruits WHERE id=?').bind(row.id)]);
+        return json({deleted:true});
       }
       if(u.pathname==='/api/media'&&request.method==='POST') {
         if(Number(request.headers.get('content-length'))>51*1024*1024) return error('Bitte Videos bis 50 MB und Bilder bis 12 MB auswählen.',413);
